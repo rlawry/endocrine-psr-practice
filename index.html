@@ -10,14 +10,13 @@
 <style>
   :root{
     box-sizing:border-box;
-    padding-top:env(safe-area-inset-top,0px);
-    padding-bottom:env(safe-area-inset-bottom,0px);
     --ink:#0d1b2a;
     --paper:#f2f4f7;
     --edge:#c9d2de;
     --gold:#e8a13a;
   }
   *,*::before,*::after{box-sizing:inherit}
+  html{height:100%}
   html,body{margin:0;padding:0}
   body{
     font-family:"Atkinson Hyperlegible","Verdana",sans-serif;
@@ -26,25 +25,22 @@
     display:flex;
     flex-direction:column;
     align-items:center;
-    min-height:100%;
-    padding:14px 10px 26px;
-  }
-  h1{
-    font-size:1.05rem;
-    font-weight:700;
-    letter-spacing:.01em;
-    margin:0 0 10px;
-    color:#cfe2f5;
+    height:100dvh;
+    overflow:hidden;
+    gap:5px;
+    padding:calc(6px + env(safe-area-inset-top,0px)) 8px calc(8px + env(safe-area-inset-bottom,0px));
   }
   #wrap{
     position:relative;
+    flex:1 1 auto;
+    min-height:0;
     width:100%;
-    max-width:1000px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
   }
   canvas{
     display:block;
-    width:100%;
-    height:auto;
     border-radius:10px;
     background:#0b1020;
     touch-action:none;
@@ -52,18 +48,17 @@
   #controls{
     display:flex;
     flex-wrap:wrap;
-    gap:10px;
+    gap:8px;
     justify-content:center;
     align-items:center;
-    margin-top:12px;
+    flex:0 0 auto;
     width:100%;
-    max-width:1000px;
   }
   button{
     font-family:inherit;
-    font-size:1rem;
+    font-size:.92rem;
     font-weight:700;
-    padding:11px 20px;
+    padding:8px 15px;
     border-radius:8px;
     border:2px solid #2b3a52;
     background:#1b2536;
@@ -77,7 +72,8 @@
   button.primary:hover:not(:disabled){background:#f5b657}
   button.submit{background:#2e7d5b;border-color:#1f5b41;color:#f0fff8}
   button.submit:hover:not(:disabled){background:#379a6e}
-  .nudge{min-width:60px;font-size:1.2rem;padding:9px 16px}
+  .nudge{min-width:52px;font-size:1.05rem;padding:6px 13px}
+  #fsBtn{font-size:.8rem;padding:5px 11px;font-weight:400}
   #overlay{
     position:absolute;
     inset:0;
@@ -85,36 +81,44 @@
     align-items:center;
     justify-content:center;
     flex-direction:column;
-    gap:14px;
-    padding:20px;
+    gap:11px;
+    padding:16px;
   }
   #overlay.on{display:flex}
-  #overlay label{font-size:1.05rem;font-weight:700;color:#0e2a1c;text-shadow:0 1px 0 rgba(255,255,255,.5)}
+  #overlay label{font-size:.98rem;font-weight:700;color:#0e2a1c;text-shadow:0 1px 0 rgba(255,255,255,.5)}
   #nameInput{
     font-family:inherit;
-    font-size:1.15rem;
-    padding:11px 14px;
+    font-size:1.05rem;
+    padding:9px 13px;
     border-radius:8px;
     border:3px solid #2e7d5b;
     background:#f7fff9;
     color:#123;
-    width:min(340px,80%);
+    width:min(320px,80%);
     text-align:center;
   }
   #hint{
-    margin-top:10px;
-    font-size:.86rem;
-    line-height:1.5;
+    margin:0;
+    font-size:.78rem;
+    line-height:1.4;
     color:#93a6c0;
     max-width:760px;
     text-align:center;
+    flex:0 0 auto;
+  }
+  /* Short screens (most Chromebooks): drop page chrome so the board keeps its size */
+  @media (max-height:700px){
+    #hint{display:none}
+  }
+  @media (max-height:600px){
+    body{gap:4px}
+    button{padding:6px 12px;font-size:.86rem}
+    .nudge{padding:5px 11px}
   }
   @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
 </style>
 </head>
 <body>
-
-<h1>Endocrine PSR Barrels</h1>
 
 <div id="wrap">
   <canvas id="game" width="1000" height="640" aria-label="Endocrine word-part matching game"></canvas>
@@ -132,9 +136,10 @@
   <button class="submit" id="submitBtn">SUBMIT</button>
   <button id="nextBtn" style="display:none">Begin next round</button>
   <button id="againBtn" style="display:none">Try again</button>
+  <button id="fsBtn">Fullscreen</button>
 </div>
 
-<p id="hint">Spin the barrels, then scroll the right barrel (drag it, use the arrows, or press &uarr;/&darr;) until the meaning matches the word part on the left. Press SUBMIT to lock it in.</p>
+<p id="hint">Drag the right barrel, use the arrows, or press &uarr;/&darr; to line up the meaning. Enter submits.</p>
 
 <script>
 (function(){
@@ -184,14 +189,25 @@ const ctx=cv.getContext("2d");
 const W=1000,H=640;
 const reduceMotion=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-function fitDPR(){
+const wrapEl=document.getElementById("wrap");
+
+function layout(){
   const dpr=Math.min(window.devicePixelRatio||1,2);
   cv.width=W*dpr; cv.height=H*dpr;
-  cv.style.aspectRatio=W+" / "+H;
   ctx.setTransform(dpr,0,0,dpr,0,0);
+  // fit the board into whatever space the page chrome leaves, letterboxed
+  const availW=wrapEl.clientWidth||W;
+  const availH=wrapEl.clientHeight||H;
+  const s=Math.min(availW/W, availH/H, 1.3);
+  if(cv.style){
+    cv.style.width=Math.max(1,Math.floor(W*s))+"px";
+    cv.style.height=Math.max(1,Math.floor(H*s))+"px";
+  }
 }
-fitDPR();
-window.addEventListener("resize",fitDPR);
+layout();
+window.addEventListener("resize",layout);
+window.addEventListener("orientationchange",layout);
+document.addEventListener("fullscreenchange",()=>setTimeout(layout,60));
 
 const F=(w,s)=>w+" "+s+'px "Atkinson Hyperlegible", Verdana, sans-serif';
 
@@ -860,6 +876,20 @@ const againBtn=document.getElementById("againBtn");
 const overlay=document.getElementById("overlay");
 const nameInput=document.getElementById("nameInput");
 const crownBtn=document.getElementById("crownBtn");
+const fsBtn=document.getElementById("fsBtn");
+
+if(fsBtn){
+  fsBtn.addEventListener("click",()=>{
+    if(!document.fullscreenElement){
+      const el=document.documentElement;
+      if(el.requestFullscreen) el.requestFullscreen();
+      fsBtn.textContent="Exit fullscreen";
+    }else{
+      if(document.exitFullscreen) document.exitFullscreen();
+      fsBtn.textContent="Fullscreen";
+    }
+  });
+}
 
 function syncButtons(){
   const playing=S.scene==="play";
