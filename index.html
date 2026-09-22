@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Endocrine PSR Barrels</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    box-sizing:border-box;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+    --ink:#0d1b2a;
+    --paper:#f2f4f7;
+    --edge:#c9d2de;
+    --gold:#e8a13a;
+  }
+  *,*::before,*::after{box-sizing:inherit}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:"Atkinson Hyperlegible","Verdana",sans-serif;
+    background:#10141c;
+    color:var(--paper);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    min-height:100%;
+    padding:14px 10px 26px;
+  }
+  h1{
+    font-size:1.05rem;
+    font-weight:700;
+    letter-spacing:.01em;
+    margin:0 0 10px;
+    color:#cfe2f5;
+  }
+  #wrap{
+    position:relative;
+    width:100%;
+    max-width:1000px;
+  }
+  canvas{
+    display:block;
+    width:100%;
+    height:auto;
+    border-radius:10px;
+    background:#0b1020;
+    touch-action:none;
+  }
+  #controls{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    justify-content:center;
+    align-items:center;
+    margin-top:12px;
+    width:100%;
+    max-width:1000px;
+  }
+  button{
+    font-family:inherit;
+    font-size:1rem;
+    font-weight:700;
+    padding:11px 20px;
+    border-radius:8px;
+    border:2px solid #2b3a52;
+    background:#1b2536;
+    color:#e7eefb;
+    cursor:pointer;
+  }
+  button:hover:not(:disabled){background:#243350}
+  button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+  button:disabled{opacity:.38;cursor:not-allowed}
+  button.primary{background:var(--gold);border-color:#b97c1f;color:#231402}
+  button.primary:hover:not(:disabled){background:#f5b657}
+  button.submit{background:#2e7d5b;border-color:#1f5b41;color:#f0fff8}
+  button.submit:hover:not(:disabled){background:#379a6e}
+  .nudge{min-width:60px;font-size:1.2rem;padding:9px 16px}
+  #overlay{
+    position:absolute;
+    inset:0;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    gap:14px;
+    padding:20px;
+  }
+  #overlay.on{display:flex}
+  #overlay label{font-size:1.05rem;font-weight:700;color:#0e2a1c;text-shadow:0 1px 0 rgba(255,255,255,.5)}
+  #nameInput{
+    font-family:inherit;
+    font-size:1.15rem;
+    padding:11px 14px;
+    border-radius:8px;
+    border:3px solid #2e7d5b;
+    background:#f7fff9;
+    color:#123;
+    width:min(340px,80%);
+    text-align:center;
+  }
+  #hint{
+    margin-top:10px;
+    font-size:.86rem;
+    line-height:1.5;
+    color:#93a6c0;
+    max-width:760px;
+    text-align:center;
+  }
+  @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+
+<h1>Endocrine PSR Barrels</h1>
+
+<div id="wrap">
+  <canvas id="game" width="1000" height="640" aria-label="Endocrine word-part matching game"></canvas>
+  <div id="overlay">
+    <label for="nameInput">Enter your name for the Endocrown</label>
+    <input id="nameInput" maxlength="18" autocomplete="off" placeholder="Your name">
+    <button class="primary" id="crownBtn">Receive the Endocrown</button>
+  </div>
+</div>
+
+<div id="controls">
+  <button class="primary" id="spinBtn">Spin!</button>
+  <button class="nudge" id="upBtn" aria-label="Scroll definitions up">&#9650;</button>
+  <button class="nudge" id="downBtn" aria-label="Scroll definitions down">&#9660;</button>
+  <button class="submit" id="submitBtn">SUBMIT</button>
+  <button id="nextBtn" style="display:none">Begin next round</button>
+  <button id="againBtn" style="display:none">Try again</button>
+</div>
+
+<p id="hint">Spin the barrels, then scroll the right barrel (drag it, use the arrows, or press &uarr;/&darr;) until the meaning matches the word part on the left. Press SUBMIT to lock it in.</p>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------- Word list: the 30 endocrine word parts ---------- */
+const TERMS = [
+  {psr:"adren- / adreno-",      def:"Adrenal gland"},
+  {psr:"thyr- / thyro-",        def:"Thyroid gland, shield"},
+  {psr:"pituit- / pituitar-",   def:"Pituitary gland"},
+  {psr:"gonad- / gonado-",      def:"Sex gland"},
+  {psr:"pancreat- / pancreato-",def:"Pancreas"},
+  {psr:"crin- / crino-",        def:"Secrete"},
+  {psr:"somat- / somato-",      def:"Body"},
+  {psr:"horm- / hormon-",       def:"Impel, set in motion"},
+  {psr:"gluc- / glyc-",         def:"Sugar, glucose"},
+  {psr:"oophor- / oophoro-",    def:"Ovary"},
+  {psr:"-itis",                 def:"Inflammation"},
+  {psr:"-emia",                 def:"Blood condition"},
+  {psr:"-uria",                 def:"Urine condition"},
+  {psr:"-tropin / -tropic",     def:"Stimulating, turning toward"},
+  {psr:"-megaly",               def:"Enlargement"},
+  {psr:"-osis",                 def:"Abnormal condition, increase"},
+  {psr:"-pathy",                def:"Disease"},
+  {psr:"-ism",                  def:"Condition, state of"},
+  {psr:"-trophy",               def:"Nourishment, growth"},
+  {psr:"-poietin",              def:"To make, produce"},
+  {psr:"hyper-",                def:"Over, above, excessive"},
+  {psr:"hypo-",                 def:"Under, below, deficient"},
+  {psr:"eu-",                   def:"Good, normal"},
+  {psr:"poly-",                 def:"Many, excessive"},
+  {psr:"olig- / oligo-",        def:"Few, scanty"},
+  {psr:"para-",                 def:"Beside, near"},
+  {psr:"endo-",                 def:"Within, inner"},
+  {psr:"exo-",                  def:"Outside, outward"},
+  {psr:"pan-",                  def:"All"},
+  {psr:"dys-",                  def:"Difficult, abnormal"}
+];
+TERMS.forEach((t,i)=>t.id=i);
+
+const ROUND_SIZES=[5,10,15];
+const ORD=["First","Second","Third"];
+
+/* ---------- Canvas ---------- */
+const cv=document.getElementById("game");
+const ctx=cv.getContext("2d");
+const W=1000,H=640;
+const reduceMotion=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function fitDPR(){
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  cv.width=W*dpr; cv.height=H*dpr;
+  cv.style.aspectRatio=W+" / "+H;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+fitDPR();
+window.addEventListener("resize",fitDPR);
+
+const F=(w,s)=>w+" "+s+'px "Atkinson Hyperlegible", Verdana, sans-serif';
+
+/* ---------- Helpers ---------- */
+const clamp=(v,a,b)=>v<a?a:(v>b?b:v);
+const lerp=(a,b,t)=>a+(b-a)*t;
+const wrap=(i,n)=>((i%n)+n)%n;
+const easeOut=t=>1-Math.pow(1-t,3);
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function roundRect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
+
+/* ---------- Game state ---------- */
+const S={
+  scene:"play",            // play | washout | lose | dissolve | garden | hall | crown
+  roundIdx:0,
+  pool:[],                 // terms for current round
+  remaining:[],            // unanswered term ids
+  correctInRound:0,
+  wrongStreak:0,
+  slices:0,                // cake slices (per correct answer)
+  wholeCakes:0,            // whole cakes (per completed round)
+  blueness:0,              // 0..1 background blueness
+  darkness:0,              // 0..1 background darkness
+  ants:[],
+  stars:[],
+  flash:null,              // {kind:'right'|'wrong', t}
+  t:0,
+  trans:{active:false,p:0,dur:1600,kind:null},
+  loseT:0,
+  loseDrips:[],
+  playerName:""
+};
+
+for(let i=0;i<90;i++){
+  S.stars.push({x:Math.random()*W,y:Math.random()*H*0.72,r:Math.random()*1.5+0.5,tw:Math.random()*Math.PI*2});
+}
+
+/* ---------- Barrels ---------- */
+function Barrel(x,y,w,label){
+  this.x=x; this.y=y; this.w=w; this.label=label;
+  this.items=[]; this.off=0; this.from=0; this.to=0;
+  this.spinT=1; this.spinDur=1; this.spinning=false;
+  this.drag=null;
+}
+Barrel.prototype.setItems=function(items){this.items=items; this.off=0;};
+Barrel.prototype.spinTo=function(idx,dur,extraLoops){
+  const n=this.items.length;
+  const cur=this.off;
+  let target=idx;
+  while(target<cur+2) target+=n;
+  target+=n*(extraLoops||0);
+  this.from=cur; this.to=target; this.spinT=0;
+  this.spinDur=reduceMotion?0.25:dur; this.spinning=true;
+};
+Barrel.prototype.nudge=function(d){
+  if(this.spinning) return;
+  this.from=this.off; this.to=Math.round(this.off)+d;
+  this.spinT=0; this.spinDur=reduceMotion?0.08:0.22; this.spinning=true;
+};
+Barrel.prototype.snap=function(){
+  this.from=this.off; this.to=Math.round(this.off);
+  this.spinT=0; this.spinDur=reduceMotion?0.06:0.16; this.spinning=true;
+};
+Barrel.prototype.update=function(dt){
+  if(!this.spinning) return;
+  this.spinT=Math.min(1,this.spinT+dt/this.spinDur);
+  this.off=lerp(this.from,this.to,easeOut(this.spinT));
+  if(this.spinT>=1){this.off=wrap(this.to,this.items.length);this.spinning=false;}
+};
+Barrel.prototype.current=function(){
+  return this.items[wrap(Math.round(this.off),this.items.length)];
+};
+
+const ITEM_H=52, SLOTS=2, BAR_H=ITEM_H*(SLOTS*2+1);
+const left =new Barrel(70, 214, 330, "Word part");
+const right=new Barrel(470,214, 460, "Meaning");
+
+function drawBarrel(b,active){
+  const x=b.x,y=b.y,w=b.w,h=BAR_H;
+  ctx.save();
+
+  // label
+  ctx.font=F("700",15);
+  ctx.fillStyle="rgba(206,226,250,.82)";
+  ctx.textAlign="left"; ctx.textBaseline="alphabetic";
+  ctx.fillText(b.label,x+4,y-13);
+
+  // casing
+  ctx.save();
+  roundRect(ctx,x-7,y-7,w+14,h+14,14);
+  ctx.fillStyle="#1a2437"; ctx.fill();
+  ctx.lineWidth=3; ctx.strokeStyle=active?"#e8a13a":"#33425d"; ctx.stroke();
+  ctx.restore();
+
+  // drum face
+  ctx.save();
+  roundRect(ctx,x,y,w,h,9); ctx.clip();
+  const g=ctx.createLinearGradient(0,y,0,y+h);
+  g.addColorStop(0,"#0a0f1a"); g.addColorStop(.18,"#23324a");
+  g.addColorStop(.5,"#33455f"); g.addColorStop(.82,"#23324a"); g.addColorStop(1,"#0a0f1a");
+  ctx.fillStyle=g; ctx.fillRect(x,y,w,h);
+
+  const cy=y+h/2, base=Math.round(b.off), n=b.items.length;
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  for(let k=-SLOTS-1;k<=SLOTS+1;k++){
+    const idx=wrap(base+k,n);
+    const iy=cy+((base+k)-b.off)*ITEM_H;
+    const d=Math.abs(iy-cy)/(ITEM_H*(SLOTS+1));
+    const a=clamp(1-d*1.05,0,1);
+    if(a<=.02) continue;
+    const sc=clamp(1-d*0.3,.6,1);
+    ctx.save();
+    ctx.globalAlpha=a;
+    ctx.translate(x+w/2,iy);
+    ctx.scale(1,sc);
+    const isCenter=Math.abs(iy-cy)<ITEM_H*0.5;
+    ctx.font=F(isCenter?"700":"400",isCenter?21:18);
+    ctx.fillStyle=isCenter?"#fff8e8":"#b9cbe4";
+    let txt=b.items[idx].text;
+    // shrink to fit
+    let size=isCenter?21:18;
+    while(ctx.measureText(txt).width>w-26 && size>11){size--;ctx.font=F(isCenter?"700":"400",size);}
+    ctx.fillText(txt,0,0);
+    ctx.restore();
+  }
+  ctx.restore();
+
+  // center selection window
+  ctx.save();
+  roundRect(ctx,x+3,y+h/2-ITEM_H/2,w-6,ITEM_H,7);
+  ctx.strokeStyle=active?"rgba(232,161,58,.95)":"rgba(150,180,215,.5)";
+  ctx.lineWidth=2.5; ctx.stroke();
+  ctx.restore();
+
+  ctx.restore();
+}
+
+/* ---------- Round setup ---------- */
+let deck=[];
+function startRun(){
+  deck=shuffle(TERMS);
+  S.roundIdx=0; S.slices=0; S.wholeCakes=0; S.blueness=0; S.darkness=0;
+  S.ants=[]; S.playerName="";
+  startRound();
+}
+function startRound(){
+  const start=ROUND_SIZES.slice(0,S.roundIdx).reduce((a,b)=>a+b,0);
+  S.pool=deck.slice(start,start+ROUND_SIZES[S.roundIdx]);
+  S.remaining=S.pool.map(t=>t.id);
+  S.correctInRound=0; S.wrongStreak=0; S.ants=[];
+  S.darkness=0;
+  left.setItems(S.pool.map(t=>({id:t.id,text:t.psr})));
+  right.setItems(shuffle(S.pool).map(t=>({id:t.id,text:t.def})));
+  S.scene="play";
+  syncButtons();
+  doSpin();
+}
+
+/* ---------- Actions ---------- */
+function doSpin(){
+  if(S.scene!=="play") return;
+  // left lands on a random still-unanswered term
+  const liveIdx=left.items.map((it,i)=>S.remaining.indexOf(it.id)>=0?i:-1).filter(i=>i>=0);
+  if(!liveIdx.length) return;
+  const target=liveIdx[Math.floor(Math.random()*liveIdx.length)];
+  left.spinTo(target,1.15,2);
+  right.spinTo(Math.floor(Math.random()*right.items.length),1.45,3);
+  S.flash=null;
+  syncButtons();
+}
+
+function doSubmit(){
+  if(S.scene!=="play"||left.spinning||right.spinning) return;
+  const L=left.current(), R=right.current();
+  if(S.remaining.indexOf(L.id)<0) return;      // already solved; spin again
+  if(L.id===R.id){
+    S.remaining=S.remaining.filter(id=>id!==L.id);
+    S.correctInRound++;
+    S.slices++;
+    S.blueness=clamp(S.blueness+0.075,0,1);
+    S.darkness=clamp(S.darkness-0.06,0,1);
+    S.wrongStreak=0;
+    S.flash={kind:"right",t:0};
+    if(S.correctInRound>=ROUND_SIZES[S.roundIdx]){
+      beginTransition("garden");
+      return;
+    }
+    setTimeout(()=>{ if(S.scene==="play") doSpin(); }, reduceMotion?180:620);
+  }else{
+    S.wrongStreak++;
+    S.darkness=clamp(S.darkness+0.13,0,1);
+    S.flash={kind:"wrong",t:0};
+    for(let i=0;i<7;i++) spawnAnt();
+    if(S.wrongStreak>=4){ beginTransition("lose"); return; }
+  }
+  syncButtons();
+}
+
+function spawnAnt(){
+  const edge=Math.floor(Math.random()*4);
+  let x,y;
+  if(edge===0){x=Math.random()*W;y=-12;}
+  else if(edge===1){x=W+12;y=Math.random()*H;}
+  else if(edge===2){x=Math.random()*W;y=H+12;}
+  else{x=-12;y=Math.random()*H;}
+  S.ants.push({x,y,a:Math.random()*Math.PI*2,sp:22+Math.random()*30,turn:0,ph:Math.random()*99});
+}
+
+/* ---------- Transitions ---------- */
+let snap=document.createElement("canvas");
+snap.width=W; snap.height=H;
+const sctx=snap.getContext("2d");
+let stripes=[];
+
+function beginTransition(kind){
+  sctx.setTransform(1,0,0,1,0,0);
+  sctx.clearRect(0,0,W,H);
+  sctx.drawImage(cv,0,0,W,H);
+  stripes=[];
+  const sw=10;
+  for(let x=0;x<W;x+=sw){
+    stripes.push({x,w:sw,delay:Math.random()*0.32,speed:0.75+Math.random()*0.85,wob:Math.random()*Math.PI*2});
+  }
+  if(kind==="lose"){
+    S.loseT=0;
+    S.loseDrips=[];
+    ctx.font=F("700",86);
+    const tw=ctx.measureText("You Lose.").width;
+    const x0=W/2-tw/2;
+    for(let i=0;i<22;i++){
+      S.loseDrips.push({
+        x:x0+8+Math.random()*(tw-16),
+        len:26+Math.random()*118,
+        w:1.6+Math.random()*2.2,
+        delay:Math.random()*0.9,
+        dur:0.9+Math.random()*1.5
+      });
+    }
+  }
+  S.trans={active:true,p:0,dur:reduceMotion?600:1900,kind:kind};
+  S.scene="washout";
+  syncButtons();
+}
+
+function drawWashout(){
+  const p=S.trans.p;
+  // reveal layer underneath
+  if(S.trans.kind==="lose") drawLoseBase(p);
+  else drawGardenBase(p);
+
+  // paint running off
+  for(const st of stripes){
+    const lp=clamp((p-st.delay)/(1-st.delay||1),0,1);
+    const e=lp*lp*st.speed;
+    const dy=e*H*1.35;
+    const alpha=clamp(1-lp*1.25,0,1);
+    if(alpha<=0.01) continue;
+    const wob=Math.sin(p*7+st.wob)*5*lp;
+    ctx.save();
+    ctx.globalAlpha=alpha;
+    ctx.drawImage(snap, st.x,0,st.w,H,  st.x+wob,dy,st.w,H);
+    // drip trail
+    ctx.globalAlpha=alpha*0.5;
+    ctx.drawImage(snap, st.x,H*0.55,st.w,8,  st.x+wob,dy-26*lp,st.w,30*lp+1);
+    ctx.restore();
+  }
+  // wet sheen
+  ctx.save();
+  ctx.globalAlpha=0.16*(1-p);
+  ctx.fillStyle="#9fd8ff";
+  for(let i=0;i<W;i+=26){
+    const h=Math.sin(i*0.05+p*9)*16+20;
+    ctx.fillRect(i,p*H*0.9,3,h);
+  }
+  ctx.restore();
+}
+
+/* ---------- Scene painters ---------- */
+function drawPlayBackground(){
+  const b=S.blueness;
+  const top=[lerp(9,14,b),lerp(12,52,b),lerp(24,116,b)];
+  const bot=[lerp(6,10,b),lerp(9,28,b),lerp(18,62,b)];
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,`rgb(${top[0]|0},${top[1]|0},${top[2]|0})`);
+  g.addColorStop(1,`rgb(${bot[0]|0},${bot[1]|0},${bot[2]|0})`);
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+
+  // gray stars, brighter as blueness grows
+  for(const s of S.stars){
+    const tw=0.55+0.45*Math.sin(S.t*1.7+s.tw);
+    ctx.globalAlpha=clamp(b*1.05,0,1)*tw*0.9;
+    ctx.fillStyle="#c6ccd4";
+    ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha=1;
+
+  if(S.darkness>0){
+    ctx.fillStyle=`rgba(0,0,0,${clamp(S.darkness*0.78,0,.86)})`;
+    ctx.fillRect(0,0,W,H);
+  }
+}
+
+function drawSlice(x,y,s){
+  ctx.save(); ctx.translate(x,y); ctx.scale(s,s);
+  // wedge body
+  ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(26,-9); ctx.lineTo(26,13); ctx.lineTo(0,22); ctx.closePath();
+  ctx.fillStyle="#f6dda8"; ctx.fill();
+  // jam stripe
+  ctx.beginPath(); ctx.moveTo(0,8); ctx.lineTo(26,-1); ctx.lineTo(26,3); ctx.lineTo(0,12); ctx.closePath();
+  ctx.fillStyle="#d1466a"; ctx.fill();
+  // frosting top
+  ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(26,-9); ctx.lineTo(26,-14); ctx.lineTo(0,-5); ctx.closePath();
+  ctx.fillStyle="#fff0f6"; ctx.fill();
+  // cherry
+  ctx.beginPath(); ctx.arc(7,-6,4.2,0,Math.PI*2); ctx.fillStyle="#e0344f"; ctx.fill();
+  ctx.strokeStyle="#7a4a1e"; ctx.lineWidth=1.4;
+  ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(26,-9); ctx.stroke();
+  ctx.restore();
+}
+function drawWholeCake(x,y,s){
+  ctx.save(); ctx.translate(x,y); ctx.scale(s,s);
+  ctx.beginPath(); ctx.ellipse(0,16,26,9,0,0,Math.PI*2); ctx.fillStyle="#d9b77e"; ctx.fill();
+  ctx.fillStyle="#f6dda8"; ctx.fillRect(-26,0,52,16);
+  ctx.beginPath(); ctx.ellipse(0,0,26,9,0,0,Math.PI*2); ctx.fillStyle="#fff0f6"; ctx.fill();
+  ctx.fillStyle="#d1466a"; ctx.fillRect(-26,6,52,3.5);
+  for(let i=-2;i<=2;i++){
+    ctx.beginPath(); ctx.arc(i*9,-2,3.1,0,Math.PI*2); ctx.fillStyle="#e0344f"; ctx.fill();
+  }
+  ctx.strokeStyle="#ffd98a"; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(0,-9); ctx.lineTo(0,-19); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0,-22,3.4,0,Math.PI*2); ctx.fillStyle="#ffcf5a"; ctx.fill();
+  ctx.restore();
+}
+
+function drawCakeTray(){
+  // slices accumulate in the upper-left corner
+  const perRow=8;
+  for(let i=0;i<S.slices;i++){
+    const r=Math.floor(i/perRow), c=i%perRow;
+    drawSlice(20+c*30, 26+r*30, 0.82);
+  }
+  for(let i=0;i<S.wholeCakes;i++){
+    drawWholeCake(42+i*72, 118, 0.85);
+  }
+}
+
+function drawAnts(dt){
+  for(const a of S.ants){
+    if(S.scene==="play"){
+      // damped steering: without the decay term the turn rate locks in and the ant circles
+      a.turn=a.turn*0.90+(Math.random()-0.5)*1.8;
+      a.turn=clamp(a.turn,-2.6,2.6);
+      if(Math.random()<0.004) a.a+=(Math.random()-0.5)*1.5;   // occasional sharp scurry
+      a.a+=a.turn*dt;
+      a.x+=Math.cos(a.a)*a.sp*dt;
+      a.y+=Math.sin(a.a)*a.sp*dt;
+      if(a.x<-20)a.x=W+18; if(a.x>W+20)a.x=-18;
+      if(a.y<-20)a.y=H+18; if(a.y>H+20)a.y=-18;
+    }
+    ctx.save();
+    ctx.translate(a.x,a.y); ctx.rotate(a.a);
+    ctx.fillStyle="#2a1b12";
+    ctx.beginPath(); ctx.ellipse(-5,0,3.1,2.4,0,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0,0,2.3,1.9,0,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(4.6,0,2.7,2.2,0,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle="#2a1b12"; ctx.lineWidth=1;
+    const wig=Math.sin(S.t*14+a.ph)*1.5;
+    for(let i=-1;i<=1;i++){
+      ctx.beginPath(); ctx.moveTo(i*2,0); ctx.lineTo(i*2-1,-4.6-wig*0.3); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(i*2,0); ctx.lineTo(i*2-1, 4.6+wig*0.3); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.moveTo(6,-.6); ctx.lineTo(9,-3.4+wig*0.4); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(6,.6); ctx.lineTo(9, 3.4-wig*0.4); ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function drawHUD(){
+  const size=ROUND_SIZES[S.roundIdx];
+  ctx.save();
+  ctx.font=F("700",17); ctx.textAlign="right"; ctx.textBaseline="top";
+  ctx.fillStyle="#d7e6fa";
+  ctx.fillText(`Round ${S.roundIdx+1} of 3`,W-22,22);
+  ctx.font=F("400",15);
+  ctx.fillStyle="#a8c0dc";
+  ctx.fillText(`${S.correctInRound} of ${size} matched`,W-22,46);
+  // wrong-streak pips
+  ctx.textAlign="right";
+  for(let i=0;i<4;i++){
+    const on=i<S.wrongStreak;
+    ctx.beginPath(); ctx.arc(W-30-i*20,84,6.5,0,Math.PI*2);
+    ctx.fillStyle=on?"#d1462f":"rgba(180,200,225,.22)"; ctx.fill();
+  }
+  ctx.font=F("400",12.5); ctx.fillStyle="#8fa6c2";
+  ctx.fillText("misses in a row",W-110,78);
+  ctx.restore();
+}
+
+function drawFlash(dt){
+  if(!S.flash) return;
+  S.flash.t+=dt;
+  const life=1.0, p=S.flash.t/life;
+  if(p>=1){S.flash=null;return;}
+  const a=(1-p)*0.9;
+  ctx.save();
+  ctx.globalAlpha=a;
+  ctx.font=F("700",34); ctx.textAlign="center"; ctx.textBaseline="middle";
+  if(S.flash.kind==="right"){
+    ctx.fillStyle="#7ce0a8";
+    ctx.fillText("Match!",W/2,152-p*24);
+  }else{
+    ctx.fillStyle="#ff8a6b";
+    ctx.fillText("Not a match",W/2,152-p*18);
+  }
+  ctx.restore();
+}
+
+function drawPlay(dt){
+  drawPlayBackground();
+  drawBarrel(left,false);
+  drawBarrel(right,true);
+  // arrow hint between barrels
+  ctx.save();
+  ctx.globalAlpha=.5; ctx.fillStyle="#cfe0f5"; ctx.font=F("700",26);
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.fillText("=",(left.x+left.w+right.x)/2,left.y+BAR_H/2);
+  ctx.restore();
+  drawCakeTray();
+  drawAnts(dt);
+  drawHUD();
+  drawFlash(dt);
+}
+
+/* ----- Lose scene ----- */
+function drawLoseBase(p){
+  ctx.fillStyle="#07060a"; ctx.fillRect(0,0,W,H);
+  const reveal=clamp((p-0.45)/0.55,0,1);
+  if(reveal<=0.01) return;
+
+  const cx=W/2, cy=H/2-10;
+  ctx.save();
+  ctx.globalAlpha=reveal;
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.font=F("700",86);
+
+  // drips hang from the baseline of the text and creep downward, then stop
+  const baseY=cy+30;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0,baseY,W,H-baseY); ctx.clip();
+  for(const d of S.loseDrips){
+    const lp=easeOut(clamp((S.loseT-d.delay)/d.dur,0,1));
+    if(lp<=0) continue;
+    const len=d.len*lp;
+    const g=ctx.createLinearGradient(0,baseY,0,baseY+len+6);
+    g.addColorStop(0,"#ff7a18");
+    g.addColorStop(1,"#a33d06");
+    ctx.fillStyle=g;
+    ctx.fillRect(d.x-d.w/2,baseY,d.w,len);
+    ctx.beginPath();
+    ctx.arc(d.x,baseY+len,d.w*0.95,0,Math.PI*2);
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // the words sit still; the paint below them does the moving
+  ctx.shadowColor="rgba(255,120,20,.7)"; ctx.shadowBlur=30;
+  ctx.fillStyle="#ff7a18";
+  ctx.fillText("You Lose.",cx,cy);
+  ctx.shadowBlur=0;
+  ctx.restore();
+}
+function drawLose(){
+  drawLoseBase(1);
+  ctx.save();
+  ctx.textAlign="center"; ctx.font=F("400",19); ctx.fillStyle="#b9946f";
+  ctx.fillText("Four misses in a row washed the board clean.",W/2,H/2+96);
+  ctx.restore();
+}
+
+/* ----- Garden scene ----- */
+const hormShapes=[];
+for(let i=0;i<16;i++){
+  hormShapes.push({
+    x:Math.random()*W, y:120+Math.random()*300,
+    r:11+Math.random()*13, ph:Math.random()*Math.PI*2,
+    kind:i%4, sp:0.22+Math.random()*0.5,
+    hue:[["#ffd166","#f4a261"],["#9ad9a5","#5fb37a"],["#8fd4ef","#4a9ec9"],["#f0a7d8","#c76bb0"]][i%4]
+  });
+}
+function drawReceptor(x,y,s,sway){
+  ctx.save(); ctx.translate(x,y); ctx.scale(s,s); ctx.rotate(sway);
+  // stem
+  ctx.strokeStyle="#3f7a4a"; ctx.lineWidth=7; ctx.lineCap="round";
+  ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-30); ctx.stroke();
+  // cup arms
+  ctx.strokeStyle="#57a468"; ctx.lineWidth=8;
+  ctx.beginPath(); ctx.moveTo(0,-28); ctx.lineTo(-15,-48); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0,-28); ctx.lineTo( 15,-48); ctx.stroke();
+  // binding pads
+  ctx.fillStyle="#bde7c4";
+  ctx.beginPath(); ctx.arc(-16,-50,6,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc( 16,-50,6,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+function drawHormone(h,t){
+  const y=h.y+Math.sin(t*h.sp+h.ph)*14;
+  const x=h.x+Math.cos(t*h.sp*0.7+h.ph)*10;
+  ctx.save(); ctx.translate(x,y); ctx.rotate(Math.sin(t*0.4+h.ph)*0.5);
+  const g=ctx.createLinearGradient(0,-h.r,0,h.r);
+  g.addColorStop(0,h.hue[0]); g.addColorStop(1,h.hue[1]);
+  ctx.fillStyle=g;
+  ctx.beginPath();
+  if(h.kind===0){ ctx.arc(0,0,h.r,0,Math.PI*2); }
+  else if(h.kind===1){ for(let i=0;i<3;i++){const a=i/3*Math.PI*2-Math.PI/2; i?ctx.lineTo(Math.cos(a)*h.r,Math.sin(a)*h.r):ctx.moveTo(Math.cos(a)*h.r,Math.sin(a)*h.r);} ctx.closePath(); }
+  else if(h.kind===2){ for(let i=0;i<6;i++){const a=i/6*Math.PI*2; i?ctx.lineTo(Math.cos(a)*h.r,Math.sin(a)*h.r):ctx.moveTo(Math.cos(a)*h.r,Math.sin(a)*h.r);} ctx.closePath(); }
+  else { roundRect(ctx,-h.r,-h.r*0.7,h.r*2,h.r*1.4,5); }
+  ctx.fill();
+  ctx.globalAlpha=.5; ctx.fillStyle="#ffffff";
+  ctx.beginPath(); ctx.arc(-h.r*0.3,-h.r*0.35,h.r*0.26,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+function drawGardenBase(p){
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,"#bfe9f2"); g.addColorStop(.55,"#dff3d8"); g.addColorStop(1,"#8cc98a");
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // mushy green ground
+  ctx.fillStyle="#6fae6e";
+  ctx.beginPath(); ctx.moveTo(0,H);
+  for(let x=0;x<=W;x+=20){ ctx.lineTo(x, 430+Math.sin(x*0.013+1.2)*16+Math.sin(x*0.05)*5); }
+  ctx.lineTo(W,H); ctx.closePath(); ctx.fill();
+  ctx.fillStyle="#5c9a5d";
+  ctx.beginPath(); ctx.moveTo(0,H);
+  for(let x=0;x<=W;x+=20){ ctx.lineTo(x, 486+Math.sin(x*0.017+3)*13); }
+  ctx.lineTo(W,H); ctx.closePath(); ctx.fill();
+  // squishy blobs
+  for(let i=0;i<9;i++){
+    ctx.globalAlpha=.35; ctx.fillStyle="#89c78a";
+    ctx.beginPath(); ctx.ellipse(70+i*105, 520+Math.sin(i*2)*16, 62, 20, 0,0,Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha=1;
+  // receptors rooted in the ground
+  for(let i=0;i<9;i++){
+    const x=72+i*105, y=470+Math.sin(i*1.7)*22;
+    drawReceptor(x,y,1+Math.sin(i)*0.12, Math.sin(S.t*0.8+i)*0.07);
+  }
+  // floating hormones
+  for(const h of hormShapes) drawHormone(h,S.t);
+}
+function drawGarden(){
+  drawGardenBase(1);
+  ctx.save();
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.fillStyle="rgba(255,255,255,.78)";
+  roundRect(ctx,W/2-330,72,660,152,18); ctx.fill();
+  ctx.fillStyle="#1d4b2f"; ctx.font=F("700",40);
+  ctx.fillText(`${ORD[S.roundIdx]} round complete!`,W/2,118);
+  ctx.font=F("400",19); ctx.fillStyle="#2f6b45";
+  if(S.roundIdx<2){
+    ctx.fillText(`Awarded 1 whole cake. Next round: ${ROUND_SIZES[S.roundIdx+1]} word parts.`,W/2,163);
+    ctx.fillText("Begin next round when you're ready.",W/2,192);
+  }else{
+    ctx.fillText("Awarded 1 whole cake. Three cakes earned.",W/2,163);
+    ctx.fillText("The receptor hall is open.",W/2,192);
+  }
+  ctx.restore();
+  drawCakeTray();
+}
+
+/* ----- Receptor hall + crown ----- */
+function drawHallBase(){
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,"#241b3d"); g.addColorStop(.6,"#3b2a5c"); g.addColorStop(1,"#191228");
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // floor
+  ctx.fillStyle="#2a1f45"; ctx.fillRect(0,470,W,H-470);
+  ctx.strokeStyle="rgba(190,160,255,.22)"; ctx.lineWidth=1.5;
+  for(let i=-10;i<=10;i++){
+    ctx.beginPath(); ctx.moveTo(W/2+i*95,470); ctx.lineTo(W/2+i*420,H); ctx.stroke();
+  }
+  for(let y=470;y<H;y+=22){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+  // receptor pillars
+  for(let i=0;i<6;i++){
+    const x=(i<3? 90+i*110 : W-90-(5-i)*110);
+    ctx.save(); ctx.translate(x,470);
+    ctx.fillStyle="#4b3a78"; ctx.fillRect(-16,-250,32,250);
+    ctx.fillStyle="#6a54a4"; ctx.fillRect(-24,-262,48,16);
+    ctx.strokeStyle="#8f76d6"; ctx.lineWidth=9; ctx.lineCap="round";
+    ctx.beginPath(); ctx.moveTo(0,-258); ctx.lineTo(-20,-292); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,-258); ctx.lineTo( 20,-292); ctx.stroke();
+    ctx.fillStyle="#d9c9ff";
+    ctx.beginPath(); ctx.arc(-21,-294,7,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc( 21,-294,7,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+  for(const h of hormShapes){ ctx.globalAlpha=.55; drawHormone(h,S.t*0.6); }
+  ctx.globalAlpha=1;
+}
+function drawHall(){
+  drawHallBase();
+  ctx.save();
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.fillStyle="rgba(255,255,255,.9)";
+  roundRect(ctx,W/2-300,64,600,86,16); ctx.fill();
+  ctx.fillStyle="#2a1f45"; ctx.font=F("700",34);
+  ctx.fillText("The Receptor Hall",W/2,96);
+  ctx.font=F("400",17); ctx.fillStyle="#4a3a70";
+  ctx.fillText("Three cakes earned. One honor remains.",W/2,128);
+  ctx.restore();
+  drawCakeTray();
+}
+function drawCrownIcon(x,y,s){
+  ctx.save(); ctx.translate(x,y); ctx.scale(s,s);
+  ctx.beginPath();
+  ctx.moveTo(-58,18); ctx.lineTo(-46,-30); ctx.lineTo(-22,2);
+  ctx.lineTo(0,-40); ctx.lineTo(22,2); ctx.lineTo(46,-30); ctx.lineTo(58,18);
+  ctx.closePath();
+  const g=ctx.createLinearGradient(0,-40,0,20);
+  g.addColorStop(0,"#ffe9a8"); g.addColorStop(.5,"#f5c33f"); g.addColorStop(1,"#c98c16");
+  ctx.fillStyle=g; ctx.fill();
+  ctx.strokeStyle="#8f6110"; ctx.lineWidth=2.5; ctx.stroke();
+  ctx.fillStyle="#f6dda8"; ctx.fillRect(-58,18,116,13);
+  ctx.strokeRect(-58,18,116,13);
+  // receptor jewels
+  const jew=["#e0344f","#5fb37a","#4a9ec9"];
+  for(let i=-1;i<=1;i++){
+    ctx.beginPath(); ctx.arc(i*30,-6,7.5,0,Math.PI*2);
+    ctx.fillStyle=jew[i+1]; ctx.fill(); ctx.stroke();
+  }
+  ctx.restore();
+}
+function drawCrown(){
+  drawHallBase();
+  ctx.save();
+  ctx.globalAlpha=.9;
+  const rays=reduceMotion?0:S.t*0.35;
+  ctx.translate(W/2,250);
+  for(let i=0;i<14;i++){
+    ctx.save(); ctx.rotate(rays+i/14*Math.PI*2);
+    ctx.fillStyle="rgba(255,214,120,.14)";
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-24,-320); ctx.lineTo(24,-320); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+
+  drawCrownIcon(W/2,208,1.25);
+
+  ctx.save();
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  ctx.fillStyle="#ffe9a8"; ctx.font=F("700",44);
+  ctx.fillText(S.playerName||"Scholar",W/2,320);
+  ctx.fillStyle="#f5c33f"; ctx.font=F("700",26);
+  ctx.fillText("is awarded the PSR Endocrown",W/2,366);
+  ctx.fillStyle="#cfc0f0"; ctx.font=F("400",17);
+  ctx.fillText("All 30 endocrine word parts matched across three rounds.",W/2,404);
+  ctx.restore();
+  drawCakeTray();
+}
+
+/* ---------- Buttons ---------- */
+const spinBtn=document.getElementById("spinBtn");
+const upBtn=document.getElementById("upBtn");
+const downBtn=document.getElementById("downBtn");
+const submitBtn=document.getElementById("submitBtn");
+const nextBtn=document.getElementById("nextBtn");
+const againBtn=document.getElementById("againBtn");
+const overlay=document.getElementById("overlay");
+const nameInput=document.getElementById("nameInput");
+const crownBtn=document.getElementById("crownBtn");
+
+function syncButtons(){
+  const playing=S.scene==="play";
+  spinBtn.style.display=playing?"":"none";
+  upBtn.style.display=playing?"":"none";
+  downBtn.style.display=playing?"":"none";
+  submitBtn.style.display=playing?"":"none";
+  spinBtn.disabled=!playing;
+  upBtn.disabled=!playing; downBtn.disabled=!playing; submitBtn.disabled=!playing;
+  nextBtn.style.display=(S.scene==="garden")?"":"none";
+  nextBtn.textContent=(S.roundIdx>=2)?"Enter the receptor hall":"Begin next round";
+  againBtn.style.display=(S.scene==="lose")?"":"none";
+  overlay.classList.toggle("on",S.scene==="hall");
+  if(S.scene==="hall") setTimeout(()=>nameInput.focus(),60);
+}
+
+spinBtn.addEventListener("click",doSpin);
+upBtn.addEventListener("click",()=>right.nudge(-1));
+downBtn.addEventListener("click",()=>right.nudge(1));
+submitBtn.addEventListener("click",doSubmit);
+againBtn.addEventListener("click",()=>{startRun();});
+nextBtn.addEventListener("click",()=>{
+  if(S.roundIdx>=2){ S.scene="hall"; syncButtons(); }
+  else { S.roundIdx++; startRound(); }
+});
+crownBtn.addEventListener("click",()=>{
+  const v=nameInput.value.trim();
+  S.playerName=v||"Scholar";
+  S.scene="crown"; syncButtons();
+});
+nameInput.addEventListener("keydown",e=>{ if(e.key==="Enter") crownBtn.click(); });
+
+window.addEventListener("keydown",e=>{
+  if(S.scene!=="play") return;
+  if(e.key==="ArrowUp"){e.preventDefault();right.nudge(-1);}
+  else if(e.key==="ArrowDown"){e.preventDefault();right.nudge(1);}
+  else if(e.key==="Enter"){e.preventDefault();doSubmit();}
+});
+
+/* drag the right barrel */
+let dragging=null;
+function canvasPos(ev){
+  const r=cv.getBoundingClientRect();
+  return {x:(ev.clientX-r.left)*(W/r.width), y:(ev.clientY-r.top)*(H/r.height)};
+}
+cv.addEventListener("pointerdown",ev=>{
+  if(S.scene!=="play"||right.spinning) return;
+  const p=canvasPos(ev);
+  if(p.x>=right.x-7&&p.x<=right.x+right.w+7&&p.y>=right.y-7&&p.y<=right.y+BAR_H+7){
+    dragging={y:p.y,off:right.off};
+    cv.setPointerCapture(ev.pointerId);
+  }
+});
+cv.addEventListener("pointermove",ev=>{
+  if(!dragging) return;
+  const p=canvasPos(ev);
+  right.off=dragging.off-(p.y-dragging.y)/ITEM_H;
+});
+cv.addEventListener("pointerup",ev=>{
+  if(!dragging) return;
+  dragging=null; right.snap();
+  try{cv.releasePointerCapture(ev.pointerId);}catch(e){}
+});
+cv.addEventListener("pointercancel",()=>{ if(dragging){dragging=null;right.snap();} });
+
+/* ---------- Loop ---------- */
+let last=performance.now();
+function frame(now){
+  const dt=Math.min(0.05,(now-last)/1000); last=now;
+  S.t+=dt;
+  ctx.clearRect(0,0,W,H);
+
+  if(S.scene==="play"){
+    left.update(dt); right.update(dt);
+    drawPlay(dt);
+  }else if(S.scene==="washout"){
+    if(S.trans.kind==="lose") S.loseT+=dt;
+    S.trans.p+=dt*1000/S.trans.dur;
+    if(S.trans.p>=1){
+      S.trans.p=1; S.trans.active=false;
+      if(S.trans.kind==="lose"){ S.scene="lose"; }
+      else { S.wholeCakes++; S.scene="garden"; }
+      syncButtons();
+    }
+    drawWashout();
+  }else if(S.scene==="lose"){ S.loseT+=dt; drawLose(); }
+  else if(S.scene==="garden"){ drawGarden(); }
+  else if(S.scene==="hall"){ drawHall(); }
+  else if(S.scene==="crown"){ drawCrown(); }
+
+  requestAnimationFrame(frame);
+}
+
+if(document.fonts&&document.fonts.ready){
+  document.fonts.ready.then(()=>{startRun();requestAnimationFrame(frame);});
+}else{ startRun(); requestAnimationFrame(frame); }
+
+})();
+</script>
+</body>
+</html>
