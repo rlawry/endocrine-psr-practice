@@ -219,6 +219,19 @@ const easeOut=t=>1-Math.pow(1-t,3);
 function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 function roundRect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
 
+/* ---------- Audio ---------- */
+const wrongSfx=(typeof Audio!=="undefined")?new Audio("no.mp3"):null;
+if(wrongSfx){ wrongSfx.preload="auto"; wrongSfx.volume=0.85; }
+function playWrong(){
+  if(!wrongSfx) return;
+  try{
+    wrongSfx.pause();
+    wrongSfx.currentTime=0;          // restart so rapid misses each get a sound
+    const p=wrongSfx.play();
+    if(p&&p.catch) p.catch(()=>{});  // ignore autoplay/missing-file rejections
+  }catch(e){}
+}
+
 /* ---------- Game state ---------- */
 const S={
   scene:"play",            // play | washout | lose | dissolve | garden | hall | crown
@@ -397,6 +410,7 @@ function doSubmit(){
     }
     setTimeout(()=>{ if(S.scene==="play") doSpin(); }, reduceMotion?180:620);
   }else{
+    playWrong();
     S.wrongStreak++;
     S.darkness=clamp(S.darkness+0.13,0,1);
     S.flash={kind:"wrong",t:0};
